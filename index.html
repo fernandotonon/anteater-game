@@ -83,6 +83,7 @@
         let maxDepth = 10; // Maximum depth ants can dig before player loses
         let gameTime = 120; // Game time in seconds
         let timeLeft = gameTime;
+        let showDebugInfo = true; // Debug mode toggle
         
         // Map data
         const TILE_DIRT = 0;
@@ -99,7 +100,6 @@
             0,0,0,0,0,0,0,0,0,0,0,2,2,0,2,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,2,0,2,2,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,1,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -179,6 +179,29 @@
             
             // Add click event listener to the game container
             document.getElementById('game-container').addEventListener('click', handleClick);
+            
+            // Add debug toggle button
+            const debugToggle = document.createElement('button');
+            debugToggle.textContent = 'Toggle Debug Info';
+            debugToggle.style.position = 'absolute';
+            debugToggle.style.top = '10px';
+            debugToggle.style.right = '10px';
+            debugToggle.style.zIndex = '10';
+            debugToggle.addEventListener('click', toggleDebugInfo);
+            document.getElementById('game-container').appendChild(debugToggle);
+            
+            // Add keyboard shortcut for debug toggle (Press 'D')
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'd' || event.key === 'D') {
+                    toggleDebugInfo();
+                }
+            });
+        }
+        
+        // Toggle debug information display
+        function toggleDebugInfo() {
+            showDebugInfo = !showDebugInfo;
+            drawMap(); // Redraw map to update display
         }
         
         // Main game loop
@@ -268,6 +291,52 @@
                         TILE_WIDTH * 0.8, 
                         TILE_HEIGHT * 0.8
                     );
+                }
+                
+                // Display tile number for debugging
+                if (showDebugInfo) {
+                    const tileValue = gameMap[i];
+                    
+                    // Draw background for text to improve visibility
+                    gameCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    gameCtx.fillRect(
+                        x + TILE_WIDTH * 0.1,
+                        y + TILE_HEIGHT * 0.1,
+                        TILE_WIDTH * 0.8,
+                        TILE_HEIGHT * 0.8
+                    );
+                    
+                    // Draw tile value (type)
+                    gameCtx.font = '12px Arial';
+                    gameCtx.fillStyle = 'white';
+                    gameCtx.textAlign = 'center';
+                    gameCtx.textBaseline = 'middle';
+                    gameCtx.fillText(
+                        tileValue.toString(),
+                        x + TILE_WIDTH / 2,
+                        y + TILE_HEIGHT / 2 - 5
+                    );
+                    
+                    // Draw tile index (position in array)
+                    gameCtx.font = '9px Arial';
+                    gameCtx.fillStyle = 'yellow';
+                    gameCtx.fillText(
+                        `[${i}]`,
+                        x + TILE_WIDTH / 2,
+                        y + TILE_HEIGHT / 2 + 8
+                    );
+                    
+                    // If this tile is part of the anteater path, show its path position
+                    const pathIndex = anteaterPath.indexOf(i);
+                    if (pathIndex !== -1) {
+                        gameCtx.fillStyle = 'cyan';
+                        gameCtx.font = '10px Arial';
+                        gameCtx.fillText(
+                            `P:${pathIndex}`,
+                            x + TILE_WIDTH / 2,
+                            y + TILE_HEIGHT - 5
+                        );
+                    }
                 }
             }
             
@@ -623,7 +692,7 @@
                 
                 antCtx.drawImage(
                     anteaterImage,
-                    anteaterX - anteaterHeight / 2,  // Center the anteater horizontally
+                    anteaterX - 10 ,  // Center the anteater horizontally
                     anteaterY - anteaterHeight / 4,  // Position it slightly higher
                     anteaterHeight,
                     anteaterHeight
@@ -669,7 +738,7 @@
                     // Draw the first segment - from mouth to ground
                     antCtx.quadraticCurveTo(cp1x, cp1y, groundX, groundY);
                     
-                    // If we need to move horizontally underground to the first path point
+                    // If we need to move horizontally underground to the first path entry point
                     if (Math.abs(firstPoint.x - groundX) > 5) {
                         // Second curve control point - along the ground
                         const cp2x = (groundX + firstPoint.x) / 2;
@@ -700,6 +769,20 @@
                         Math.PI * 2
                     );
                     antCtx.fill();
+                    
+                    // Show path length if in debug mode
+                    if (showDebugInfo) {
+                        antCtx.font = '14px Arial';
+                        antCtx.fillStyle = 'white';
+                        antCtx.strokeStyle = 'black';
+                        antCtx.lineWidth = 2;
+                        antCtx.textAlign = 'left';
+                        antCtx.textBaseline = 'top';
+                        
+                        const debugText = `Path: ${anteaterPath.join(' → ')}`;
+                        antCtx.strokeText(debugText, 10, 40);
+                        antCtx.fillText(debugText, 10, 40);
+                    }
                 }
             }
         }
