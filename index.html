@@ -549,8 +549,8 @@
                 
                 antCtx.drawImage(
                     anteaterImage,
-                    anteaterX - anteaterHeight / 2,
-                    anteaterY,
+                    anteaterX - anteaterHeight / 4,
+                    anteaterY - anteaterHeight / 4,
                     anteaterHeight,
                     anteaterHeight
                 );
@@ -603,8 +603,8 @@
         // Trigger anteater tongue
         function antEater(index) {
             if (canEat) {
-                const lairIndex = gameMap.indexOf(TILE_LAIR);
-                anteaterPath = aStar(lairIndex, index);
+                // Instead of starting from the lair, we need a path from anteater to target
+                anteaterPath = [index]; // Just use the target index directly
                 
                 // Check for ants on the path
                 ants = ants.filter(ant => {
@@ -619,7 +619,7 @@
                 // Reset after a delay
                 setTimeout(() => {
                     anteaterPath = [];
-                }, 100);
+                }, 500); // Increased to 500ms for better visibility
                 
                 // Update UI
                 canEat = false;
