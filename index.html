@@ -104,8 +104,6 @@
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         ];
         
@@ -350,6 +348,41 @@
         
         // A* pathfinding algorithm
         function aStar(start, end) {
+            console.log("A* starting from", start, "to", end);
+            
+            // Check if end point is reachable
+            if (gameMap[end] === TILE_DIRT && end !== start) {
+                console.log("Target is a dirt tile, cannot move through it:", gameMap[end]);
+                
+                // Find the nearest non-dirt tile as an alternative target
+                let nearestNonDirt = -1;
+                let minDistance = Infinity;
+                
+                for (let i = 0; i < gameMap.length; i++) {
+                    if (gameMap[i] > 0 || gameMap[i] === -1) { // Any non-dirt tile (tunnel, dug, lair, etc)
+                        const iCol = i % MAP_COLS;
+                        const iRow = Math.floor(i / MAP_COLS);
+                        const targetCol = end % MAP_COLS;
+                        const targetRow = Math.floor(end / MAP_COLS);
+                        
+                        const distance = Math.abs(iCol - targetCol) + Math.abs(iRow - targetRow);
+                        
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestNonDirt = i;
+                        }
+                    }
+                }
+                
+                if (nearestNonDirt !== -1) {
+                    console.log("Using nearest non-dirt tile instead:", nearestNonDirt);
+                    end = nearestNonDirt;
+                } else {
+                    console.log("No non-dirt tiles found, cannot create path");
+                    return [start];
+                }
+            }
+            
             // Heuristic function (Manhattan distance)
             const heuristic = (index) => {
                 const startCol = index % MAP_COLS;
@@ -360,7 +393,7 @@
             };
             
             // Get neighbors of a node
-            const getNeighbors = (index) => {
+            function getNeighbors(index) {
                 const col = index % MAP_COLS;
                 const row = Math.floor(index / MAP_COLS);
                 
@@ -371,33 +404,62 @@
                 
                 const neighbors = [];
                 
-                // Only add walkable neighbors (tunnels, dug tiles, lair)
-                if (up >= 0 && gameMap[up] > 0) neighbors.push({
-                    index: up,
-                    g: 0, // Will be set by the algorithm
-                    f: 0  // Will be set by the algorithm
-                });
-                
-                if (down >= 0 && gameMap[down] > 0) neighbors.push({
-                    index: down,
-                    g: 0,
-                    f: 0
-                });
-                
-                if (left >= 0 && gameMap[left] > 0) neighbors.push({
-                    index: left,
-                    g: 0,
-                    f: 0
-                });
-                
-                if (right >= 0 && gameMap[right] > 0) neighbors.push({
-                    index: right,
-                    g: 0,
-                    f: 0
-                });
+                // Special case for the anteater at the top row
+                if (index === start) {
+                    // From the starting position, allow movement to any adjacent cell
+                    // that is not dirt (anything but 0)
+                    if (up >= 0 && (gameMap[up] > 0 || gameMap[up] === -1 || up === end)) neighbors.push({
+                        index: up,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (down >= 0 && (gameMap[down] > 0 || gameMap[down] === -1 || down === end)) neighbors.push({
+                        index: down,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (left >= 0 && (gameMap[left] > 0 || gameMap[left] === -1 || left === end)) neighbors.push({
+                        index: left,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (right >= 0 && (gameMap[right] > 0 || gameMap[right] === -1 || right === end)) neighbors.push({
+                        index: right,
+                        g: 0,
+                        f: 0
+                    });
+                } else {
+                    // Normal case - move through any non-dirt tile (tunnels, dug tiles, lair, etc.)
+                    if (up >= 0 && (gameMap[up] > 0 || gameMap[up] === -1 || up === end)) neighbors.push({
+                        index: up,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (down >= 0 && (gameMap[down] > 0 || gameMap[down] === -1 || down === end)) neighbors.push({
+                        index: down,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (left >= 0 && (gameMap[left] > 0 || gameMap[left] === -1 || left === end)) neighbors.push({
+                        index: left,
+                        g: 0,
+                        f: 0
+                    });
+                    
+                    if (right >= 0 && (gameMap[right] > 0 || gameMap[right] === -1 || right === end)) neighbors.push({
+                        index: right,
+                        g: 0,
+                        f: 0
+                    });
+                }
                 
                 return neighbors;
-            };
+            }
             
             // Reconstruct path from cameFrom map
             const reconstructPath = (cameFrom, current) => {
@@ -420,7 +482,13 @@
             const fScore = new Map();
             fScore.set(start, heuristic(start));
             
-            while (openSet.size > 0) {
+            // For safety, limit iterations
+            let iterations = 0;
+            const maxIterations = 1000;
+            
+            while (openSet.size > 0 && iterations < maxIterations) {
+                iterations++;
+                
                 // Find node with lowest fScore
                 let current = null;
                 let lowestFScore = Infinity;
@@ -435,6 +503,7 @@
                 
                 // If we reached the end, reconstruct and return the path
                 if (current === end) {
+                    console.log("Path found in", iterations, "iterations");
                     return reconstructPath(cameFrom, current);
                 }
                 
@@ -473,7 +542,12 @@
                 }
             }
             
-            // If we get here, no path was found
+            // If we get here, no path was found or too many iterations
+            console.log("No path found or too many iterations:", iterations);
+            
+            // We won't create a direct path since we only want to move through dug tiles
+            // Just return the starting position
+            console.log("No valid path through dug tiles exists");
             return [start];
         }
         
@@ -549,8 +623,8 @@
                 
                 antCtx.drawImage(
                     anteaterImage,
-                    anteaterX - anteaterHeight / 4,
-                    anteaterY - anteaterHeight / 4,
+                    anteaterX - anteaterHeight / 2,  // Center the anteater horizontally
+                    anteaterY - anteaterHeight / 4,  // Position it slightly higher
                     anteaterHeight,
                     anteaterHeight
                 );
@@ -564,18 +638,69 @@
                 antCtx.lineWidth = 5;
                 antCtx.beginPath();
                 
-                // Start from anteater's position
-                const startX = CANVAS_WIDTH / 2;
-                const startY = GROUND_LEVEL - 10; // Just below ground level
+                // Start from anteater's mouth position
+                const anteaterHeight = CANVAS_HEIGHT / 4;
+                const anteaterX = CANVAS_WIDTH / 2;
+                const anteaterY = GROUND_LEVEL / 2;
+                
+                // Position the tongue start at the mouth of the anteater image
+                // Adjust these values based on your anteater image
+                const startX = anteaterX;
+                const startY = anteaterY + anteaterHeight / 4;
+                
                 antCtx.moveTo(startX, startY);
                 
-                // Draw path to the target tile
-                for (let i = 0; i < anteaterPath.length; i++) {
-                    const point = centerPointsMap[anteaterPath[i]];
-                    antCtx.lineTo(point.x, point.y + GROUND_LEVEL);
+                // If we have a valid path with more than the starting point
+                if (anteaterPath.length > 0) {
+                    // Get the first point of the underground path
+                    const firstPoint = centerPointsMap[anteaterPath[0]];
+                    
+                    // Create a curve from the anteater's mouth to the first underground point
+                    // This curve goes from the anteater to the ground, then to the first path point
+                    
+                    // First curve control point - from mouth downward
+                    const cp1x = startX;
+                    const cp1y = (startY + GROUND_LEVEL) / 2;
+                    
+                    // Touch the ground directly below the anteater
+                    const groundX = startX;
+                    const groundY = GROUND_LEVEL;
+                    
+                    // Draw the first segment - from mouth to ground
+                    antCtx.quadraticCurveTo(cp1x, cp1y, groundX, groundY);
+                    
+                    // If we need to move horizontally underground to the first path point
+                    if (Math.abs(firstPoint.x - groundX) > 5) {
+                        // Second curve control point - along the ground
+                        const cp2x = (groundX + firstPoint.x) / 2;
+                        const cp2y = GROUND_LEVEL;
+                        
+                        // Draw the second segment - along ground to first path entry point
+                        antCtx.quadraticCurveTo(cp2x, cp2y, firstPoint.x, firstPoint.y + GROUND_LEVEL);
+                    }
+                    
+                    // Now follow the underground path
+                    for (let i = 1; i < anteaterPath.length; i++) {
+                        const point = centerPointsMap[anteaterPath[i]];
+                        antCtx.lineTo(point.x, point.y + GROUND_LEVEL);
+                    }
+                    
+                    // Add a small circle at the end of the tongue
+                    const lastPoint = centerPointsMap[anteaterPath[anteaterPath.length - 1]];
+                    antCtx.stroke(); // End the line
+                    
+                    // Draw the tongue tip
+                    antCtx.fillStyle = 'red';
+                    antCtx.beginPath();
+                    antCtx.arc(
+                        lastPoint.x, 
+                        lastPoint.y + GROUND_LEVEL, 
+                        TILE_WIDTH / 4, 
+                        0, 
+                        Math.PI * 2
+                    );
+                    antCtx.fill();
                 }
-                
-                antCtx.stroke();
             }
         }
         
@@ -583,18 +708,75 @@
         function handleClick(event) {
             if (!canEat || gameOver) return;
             
-            const rect = gameCanvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top - GROUND_LEVEL;
+            // Get position relative to the game container
+            const containerRect = document.getElementById('game-container').getBoundingClientRect();
+            const gameRect = gameCanvas.getBoundingClientRect();
+            
+            // Calculate click position relative to the game canvas
+            const clickX = event.clientX - gameRect.left;
+            const clickY = event.clientY - gameRect.top - GROUND_LEVEL;
+            
+            console.log("Raw click coordinates:", {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                gameRect: {
+                    left: gameRect.left,
+                    top: gameRect.top
+                },
+                clickX,
+                clickY
+            });
             
             // Only respond to clicks in the underground area
-            if (y >= 0) {
-                // Convert to tile index
-                const col = Math.floor(x / TILE_WIDTH);
-                const row = Math.floor(y / TILE_HEIGHT);
-                const index = row * MAP_COLS + col;
+            if (clickY >= 0) {
+                // Convert to tile coordinates
+                const col = Math.floor(clickX / TILE_WIDTH);
+                const row = Math.floor(clickY / TILE_HEIGHT);
                 
-                if (index >= 0 && index < gameMap.length) {
+                // Ensure coordinates are within bounds
+                if (col >= 0 && col < MAP_COLS && row >= 0 && row < MAP_ROWS) {
+                    const index = row * MAP_COLS + col;
+                    console.log("Calculated tile position:", { col, row, index });
+                    
+                    // Show a temporary visual feedback at the clicked position
+                    const clickFeedback = () => {
+                        gameCtx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                        gameCtx.beginPath();
+                        gameCtx.arc(
+                            col * TILE_WIDTH + TILE_WIDTH / 2,
+                            row * TILE_HEIGHT + TILE_HEIGHT / 2,
+                            TILE_WIDTH / 3,
+                            0,
+                            Math.PI * 2
+                        );
+                        gameCtx.fill();
+                        
+                        // Remove the feedback after a short delay
+                        setTimeout(() => {
+                            // Redraw that tile to clear the feedback
+                            gameCtx.fillStyle = getTileColor(index);
+                            gameCtx.fillRect(
+                                col * TILE_WIDTH,
+                                row * TILE_HEIGHT,
+                                TILE_WIDTH,
+                                TILE_HEIGHT
+                            );
+                            
+                            // Redraw pheromone if present
+                            if (pheromoneMap[index] > 0) {
+                                gameCtx.fillStyle = `rgba(0, 255, 0, ${pheromoneMap[index]})`;
+                                gameCtx.fillRect(
+                                    col * TILE_WIDTH + TILE_WIDTH * 0.1,
+                                    row * TILE_HEIGHT + TILE_HEIGHT * 0.1,
+                                    TILE_WIDTH * 0.8,
+                                    TILE_HEIGHT * 0.8
+                                );
+                            }
+                        }, 300);
+                    };
+                    
+                    // Show feedback and trigger anteater
+                    clickFeedback();
                     antEater(index);
                 }
             }
@@ -603,23 +785,100 @@
         // Trigger anteater tongue
         function antEater(index) {
             if (canEat) {
-                // Instead of starting from the lair, we need a path from anteater to target
-                anteaterPath = [index]; // Just use the target index directly
+                console.log("Starting antEater function with target index:", index);
+                
+                // Define the starting position - center top of the map
+                const anteaterX = Math.floor(MAP_COLS / 2); // Center column
+                const startingRow = 0; // Top row of the underground area
+                let anteaterPosition = startingRow * MAP_COLS + anteaterX;
+                
+                // Make sure we start from a non-dirt tile, if not, find the nearest one
+                if (gameMap[anteaterPosition] === TILE_DIRT) {
+                    console.log("Start position is a dirt tile, finding nearest non-dirt tile");
+                    
+                    // Find the nearest non-dirt tile to the anteater
+                    let nearestNonDirt = -1;
+                    let minDistance = Infinity;
+                    
+                    for (let i = 0; i < gameMap.length; i++) {
+                        if (gameMap[i] > 0 || gameMap[i] === -1) { // Any non-dirt tile
+                            const iCol = i % MAP_COLS;
+                            const iRow = Math.floor(i / MAP_COLS);
+                            const distance = Math.abs(iCol - anteaterX) + iRow; // Priority to top rows
+                            
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                nearestNonDirt = i;
+                            }
+                        }
+                    }
+                    
+                    if (nearestNonDirt !== -1) {
+                        console.log("Using nearest non-dirt tile for start:", nearestNonDirt);
+                        anteaterPosition = nearestNonDirt;
+                    } else {
+                        console.log("No non-dirt tiles found, cannot create path");
+                        return;
+                    }
+                }
+                
+                console.log("Anteater tongue start position:", { anteaterX, startingRow, anteaterPosition });
+                
+                // Check if the clicked position is a dirt tile
+                if (gameMap[index] === TILE_DIRT) {
+                    console.log("Target is a dirt tile, finding nearest non-dirt tile");
+                    
+                    // Find the nearest non-dirt tile to click position
+                    let nearestNonDirt = -1;
+                    let minDistance = Infinity;
+                    
+                    for (let i = 0; i < gameMap.length; i++) {
+                        if (gameMap[i] > 0 || gameMap[i] === -1) { // Any non-dirt tile
+                            const iCol = i % MAP_COLS;
+                            const iRow = Math.floor(i / MAP_COLS);
+                            const targetCol = index % MAP_COLS;
+                            const targetRow = Math.floor(index / MAP_COLS);
+                            
+                            const distance = Math.abs(iCol - targetCol) + Math.abs(iRow - targetRow);
+                            
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                nearestNonDirt = i;
+                            }
+                        }
+                    }
+                    
+                    if (nearestNonDirt !== -1) {
+                        console.log("Using nearest non-dirt tile instead:", nearestNonDirt);
+                        index = nearestNonDirt;
+                    } else {
+                        console.log("No non-dirt tiles found, cannot create path");
+                        return;
+                    }
+                }
+                
+                // Calculate path from anteater position to clicked position
+                anteaterPath = aStar(anteaterPosition, index);
+                console.log("A* path calculated:", anteaterPath);
                 
                 // Check for ants on the path
+                const eatenAnts = [];
                 ants = ants.filter(ant => {
                     if (anteaterPath.includes(ant.position)) {
                         antsEaten++;
-                        document.getElementById('ants-eaten').textContent = antsEaten;
+                        eatenAnts.push(ant.position);
                         return false;
                     }
                     return true;
                 });
                 
-                // Reset after a delay
+                console.log("Ants eaten:", eatenAnts);
+                document.getElementById('ants-eaten').textContent = antsEaten;
+                
+                // Make the tongue stay visible longer
                 setTimeout(() => {
                     anteaterPath = [];
-                }, 500); // Increased to 500ms for better visibility
+                }, 500); // 500ms for better visibility
                 
                 // Update UI
                 canEat = false;
