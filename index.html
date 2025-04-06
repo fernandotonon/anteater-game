@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anteater Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+        }
+        #game-container {
+            position: relative;
+            width: 960px;
+            height: 600px;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+        canvas {
+            border: 2px solid #333;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #backgroundCanvas {
+            background-color: #87CEEB; /* Sky blue */
+            z-index: 1;
+        }
+        #gameCanvas {
+            background-color: transparent;
+            z-index: 2;
+        }
+        #anteaterCanvas {
+            background-color: transparent;
+            z-index: 3;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            z-index: 4;
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="backgroundCanvas" width="960" height="600"></canvas>
+        <canvas id="gameCanvas" width="960" height="480"></canvas>
+        <canvas id="anteaterCanvas" width="960" height="600"></canvas>
+        <div id="ui">
+            <div>Ants Eaten: <span id="ants-eaten">0</span></div>
+            <div>Can Eat: <span id="can-eat">Yes</span></div>
+        </div>
+    </div>
+
+    <script>
+        // Game Constants
+        const CANVAS_WIDTH = 960;
+        const CANVAS_HEIGHT = 480;
+        const TOTAL_HEIGHT = 600;
+        const GROUND_LEVEL = 120; // Height of above-ground section
+        const MAP_COLS = 30;
+        const MAP_ROWS = 16;
+        const TILE_WIDTH = CANVAS_WIDTH / MAP_COLS;
+        const TILE_HEIGHT = CANVAS_HEIGHT / MAP_ROWS;
+        
+        // Game State
+        let antsEaten = 0;
+        let canEat = true;
+        let ants = [];
+        let anteaterPath = [];
+        let gameOver = false;
+        let gameWon = false;
+        let maxDepth = 10; // Maximum depth ants can dig before player loses
+        let gameTime = 120; // Game time in seconds
+        let timeLeft = gameTime;
+        
+        // Map data
+        const TILE_DIRT = 0;
+        const TILE_TUNNEL = 1;
+        const TILE_DUG = 2;
+        const TILE_LAIR = 3;
+        
+        // Initialize the map based on the original game
+        let gameMap = [
+            -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,3,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,2,0,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,2,2,0,2,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,2,0,2,2,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,1,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+        ];
+        
+        // Pheromone data for ant pathfinding
+        let pheromoneMap = new Array(MAP_COLS * MAP_ROWS).fill(0);
+        
+        // Center points for each tile
+        let centerPointsMap = [];
+        
+        // Images
+        const antImage = new Image();
+        antImage.src = 'ant.png';
+        
+        const anteaterImage = new Image();
+        anteaterImage.src = 'anteater.png';
+        
+        // Canvas setup
+        const gameCanvas = document.getElementById('gameCanvas');
+        const gameCtx = gameCanvas.getContext('2d');
+        
+        const backgroundCanvas = document.getElementById('backgroundCanvas');
+        const bgCtx = backgroundCanvas.getContext('2d');
+        
+        const anteaterCanvas = document.getElementById('anteaterCanvas');
+        const antCtx = anteaterCanvas.getContext('2d');
+        
+        // Initialize the game
+        function init() {
+            calculateCenterPoints();
+            drawBackground();
+            drawMap();
+            drawAnteater();
+            spawnAnt();
+            
+            // Position the game canvas
+            gameCanvas.style.top = GROUND_LEVEL + 'px';
+            
+            // Position the UI to account for centered layout
+            document.getElementById('ui').style.left = (window.innerWidth - CANVAS_WIDTH) / 2 + 10 + 'px';
+            
+            // Game loop
+            setInterval(gameLoop, 1000/60);
+            
+            // Spawn new ants periodically
+            setInterval(() => {
+                if (!gameOver) spawnAnt();
+            }, 1000);
+            
+            // Reset pheromones periodically
+            setInterval(() => {
+                for (let i = 0; i < pheromoneMap.length; i++) {
+                    if (pheromoneMap[i] > 0) {
+                        pheromoneMap[i] = Math.max(0, pheromoneMap[i] - 0.1);
+                    }
+                }
+            }, 1000);
+            
+            // Reset anteater ability
+            setInterval(() => {
+                canEat = true;
+                document.getElementById('can-eat').textContent = 'Yes';
+            }, 5000);
+            
+            // Count down game time
+            setInterval(() => {
+                if (!gameOver) {
+                    timeLeft--;
+                    if (timeLeft <= 0) {
+                        endGame(true); // Win if time runs out
+                    }
+                }
+            }, 1000);
+            
+            // Add click event listener to the game container
+            document.getElementById('game-container').addEventListener('click', handleClick);
+        }
+        
+        // Main game loop
+        function gameLoop() {
+            // Clear canvases
+            gameCtx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            antCtx.clearRect(0, 0, CANVAS_WIDTH, TOTAL_HEIGHT);
+            
+            // Draw game elements
+            drawMap();
+            
+            if (!gameOver) {
+                moveAnts();
+                checkWinLoseConditions();
+            }
+            
+            drawAnts();
+            drawAnteater();
+            drawAnteaterTongue();
+            drawUI();
+        }
+        
+        // Draw the background (sky, ground, etc.)
+        function drawBackground() {
+            // Sky
+            bgCtx.fillStyle = '#87CEEB'; // Sky blue
+            bgCtx.fillRect(0, 0, CANVAS_WIDTH, TOTAL_HEIGHT);
+            
+            // Clouds
+            bgCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            bgCtx.beginPath();
+            bgCtx.arc(200, 50, 30, 0, Math.PI * 2);
+            bgCtx.arc(230, 40, 25, 0, Math.PI * 2);
+            bgCtx.arc(260, 50, 20, 0, Math.PI * 2);
+            bgCtx.fill();
+            
+            bgCtx.beginPath();
+            bgCtx.arc(700, 70, 25, 0, Math.PI * 2);
+            bgCtx.arc(730, 60, 30, 0, Math.PI * 2);
+            bgCtx.arc(760, 70, 20, 0, Math.PI * 2);
+            bgCtx.fill();
+            
+            // Ground
+            bgCtx.fillStyle = '#8B4513'; // Brown
+            bgCtx.fillRect(0, GROUND_LEVEL, CANVAS_WIDTH, 20);
+            
+            // Grass
+            bgCtx.fillStyle = '#228B22'; // Forest green
+            bgCtx.fillRect(0, GROUND_LEVEL - 5, CANVAS_WIDTH, 5);
+            
+            // Draw some grass tufts
+            bgCtx.fillStyle = '#32CD32'; // Lime green
+            for (let i = 0; i < CANVAS_WIDTH; i += 30) {
+                const height = 3 + Math.random() * 5;
+                bgCtx.fillRect(i, GROUND_LEVEL - height, 2, height);
+            }
+        }
+        
+        // Calculate center points for each tile
+        function calculateCenterPoints() {
+            for (let i = 0; i < gameMap.length; i++) {
+                const x = (i % MAP_COLS) * TILE_WIDTH + TILE_WIDTH / 2;
+                const y = (Math.floor(i / MAP_COLS)) * TILE_HEIGHT + TILE_HEIGHT / 2;
+                centerPointsMap[i] = { x, y };
+            }
+        }
+        
+        // Draw the game map
+        function drawMap() {
+            // Draw each tile
+            for (let i = 0; i < gameMap.length; i++) {
+                const col = i % MAP_COLS;
+                const row = Math.floor(i / MAP_COLS);
+                const x = col * TILE_WIDTH;
+                const y = row * TILE_HEIGHT;
+                
+                // Determine tile color
+                gameCtx.fillStyle = getTileColor(i);
+                gameCtx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
+                
+                // Draw pheromone overlay
+                if (pheromoneMap[i] > 0) {
+                    gameCtx.fillStyle = `rgba(0, 255, 0, ${pheromoneMap[i]})`;
+                    gameCtx.fillRect(
+                        x + TILE_WIDTH * 0.1, 
+                        y + TILE_HEIGHT * 0.1, 
+                        TILE_WIDTH * 0.8, 
+                        TILE_HEIGHT * 0.8
+                    );
+                }
+            }
+            
+            // Draw game over message if needed
+            if (gameOver) {
+                gameCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                gameCtx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                gameCtx.font = '48px Arial';
+                gameCtx.fillStyle = 'white';
+                gameCtx.textAlign = 'center';
+                gameCtx.fillText(
+                    gameWon ? 'You Win!' : 'Game Over!', 
+                    CANVAS_WIDTH / 2, 
+                    CANVAS_HEIGHT / 2
+                );
+                
+                gameCtx.font = '24px Arial';
+                gameCtx.fillText(
+                    'Refresh to play again', 
+                    CANVAS_WIDTH / 2, 
+                    CANVAS_HEIGHT / 2 + 50
+                );
+                
+                gameCtx.font = '20px Arial';
+                gameCtx.fillText(
+                    'Ants eaten: ' + antsEaten, 
+                    CANVAS_WIDTH / 2, 
+                    CANVAS_HEIGHT / 2 + 90
+                );
+            }
+        }
+        
+        // Get tile color based on type
+        function getTileColor(index) {
+            // Check if it's part of anteater path
+            if (anteaterPath.includes(index)) {
+                return 'red';
+            }
+            
+            const tile = gameMap[index];
+            
+            if (tile === TILE_LAIR) {
+                return 'grey';
+            } else if (tile === TILE_DUG) {
+                return 'white';
+            } else if (tile === TILE_TUNNEL) {
+                return '#656521'; // brown
+            } else if (tile === TILE_DIRT) {
+                // Check if neighboring a tunnel (diggable)
+                if (isDiggable(index)) {
+                    return 'brown';
+                }
+                return 'black';
+            }
+            
+            return 'black';
+        }
+        
+        // Check if a dirt tile is neighboring a tunnel or dug tile
+        function isDiggable(index) {
+            const col = index % MAP_COLS;
+            const row = Math.floor(index / MAP_COLS);
+            
+            // Check up, down, left, right
+            const up = index - MAP_COLS;
+            const down = index + MAP_COLS;
+            const left = col > 0 ? index - 1 : -1;
+            const right = col < MAP_COLS - 1 ? index + 1 : -1;
+            
+            return (
+                (up >= 0 && gameMap[up] > 1) ||
+                (down < gameMap.length && gameMap[down] > 1) ||
+                (left >= 0 && gameMap[left] > 1) ||
+                (right >= 0 && gameMap[right] > 1)
+            );
+        }
+        
+        // A* pathfinding algorithm
+        function aStar(start, end) {
+            // Heuristic function (Manhattan distance)
+            const heuristic = (index) => {
+                const startCol = index % MAP_COLS;
+                const startRow = Math.floor(index / MAP_COLS);
+                const endCol = end % MAP_COLS;
+                const endRow = Math.floor(end / MAP_COLS);
+                return Math.abs(startCol - endCol) + Math.abs(startRow - endRow);
+            };
+            
+            // Get neighbors of a node
+            const getNeighbors = (index) => {
+                const col = index % MAP_COLS;
+                const row = Math.floor(index / MAP_COLS);
+                
+                const up = row > 0 ? index - MAP_COLS : -1;
+                const down = row < MAP_ROWS - 1 ? index + MAP_COLS : -1;
+                const left = col > 0 ? index - 1 : -1;
+                const right = col < MAP_COLS - 1 ? index + 1 : -1;
+                
+                const neighbors = [];
+                
+                // Only add walkable neighbors (tunnels, dug tiles, lair)
+                if (up >= 0 && gameMap[up] > 0) neighbors.push({
+                    index: up,
+                    g: 0, // Will be set by the algorithm
+                    f: 0  // Will be set by the algorithm
+                });
+                
+                if (down >= 0 && gameMap[down] > 0) neighbors.push({
+                    index: down,
+                    g: 0,
+                    f: 0
+                });
+                
+                if (left >= 0 && gameMap[left] > 0) neighbors.push({
+                    index: left,
+                    g: 0,
+                    f: 0
+                });
+                
+                if (right >= 0 && gameMap[right] > 0) neighbors.push({
+                    index: right,
+                    g: 0,
+                    f: 0
+                });
+                
+                return neighbors;
+            };
+            
+            // Reconstruct path from cameFrom map
+            const reconstructPath = (cameFrom, current) => {
+                const path = [current];
+                while (cameFrom.has(current)) {
+                    current = cameFrom.get(current);
+                    path.unshift(current);
+                }
+                return path;
+            };
+            
+            // Main A* algorithm
+            const openSet = new Set([start]);
+            const closedSet = new Set();
+            const cameFrom = new Map();
+            
+            const gScore = new Map();
+            gScore.set(start, 0);
+            
+            const fScore = new Map();
+            fScore.set(start, heuristic(start));
+            
+            while (openSet.size > 0) {
+                // Find node with lowest fScore
+                let current = null;
+                let lowestFScore = Infinity;
+                
+                for (const node of openSet) {
+                    const score = fScore.get(node) || Infinity;
+                    if (score < lowestFScore) {
+                        lowestFScore = score;
+                        current = node;
+                    }
+                }
+                
+                // If we reached the end, reconstruct and return the path
+                if (current === end) {
+                    return reconstructPath(cameFrom, current);
+                }
+                
+                // Move current from open to closed set
+                openSet.delete(current);
+                closedSet.add(current);
+                
+                // Check all neighbors
+                const neighbors = getNeighbors(current);
+                for (const neighbor of neighbors) {
+                    const neighborIndex = neighbor.index;
+                    
+                    // Skip if already evaluated
+                    if (closedSet.has(neighborIndex)) {
+                        continue;
+                    }
+                    
+                    // Calculate tentative gScore
+                    const tentativeGScore = (gScore.get(current) || 0) + 1;
+                    
+                    // Add neighbor to open set if not there
+                    if (!openSet.has(neighborIndex)) {
+                        openSet.add(neighborIndex);
+                    } else if (tentativeGScore >= (gScore.get(neighborIndex) || Infinity)) {
+                        // This is not a better path
+                        continue;
+                    }
+                    
+                    // This path is the best so far, record it
+                    cameFrom.set(neighborIndex, current);
+                    gScore.set(neighborIndex, tentativeGScore);
+                    
+                    // Calculate fScore with pheromone influence
+                    const pheromoneInfluence = pheromoneMap[neighborIndex] || 0;
+                    fScore.set(neighborIndex, tentativeGScore + heuristic(neighborIndex) - pheromoneInfluence);
+                }
+            }
+            
+            // If we get here, no path was found
+            return [start];
+        }
+        
+        // Create and add a new ant to the game
+        function spawnAnt() {
+            // Find lair position
+            const lairIndex = gameMap.indexOf(TILE_LAIR);
+            if (lairIndex === -1) return;
+            
+            // Calculate position
+            const x = centerPointsMap[lairIndex].x;
+            const y = centerPointsMap[lairIndex].y;
+            
+            // Create ant object
+            const ant = {
+                x: x,
+                y: y,
+                width: 20,
+                height: 20,
+                position: lairIndex,
+                path: [],
+                isCarryingDirt: false,
+                feromone: 0.1,
+                targetX: x,
+                targetY: y
+            };
+            
+            ants.push(ant);
+        }
+        
+        // Draw all ants
+        function drawAnts() {
+            ants.forEach(ant => {
+                // Draw ant
+                if (antImage.complete) {
+                    gameCtx.drawImage(
+                        antImage, 
+                        ant.x - ant.width / 2, 
+                        ant.y - ant.height / 2, 
+                        ant.width, 
+                        ant.height
+                    );
+                } else {
+                    // Fallback if image not loaded
+                    gameCtx.fillStyle = 'red';
+                    gameCtx.fillRect(
+                        ant.x - ant.width / 2, 
+                        ant.y - ant.height / 2, 
+                        ant.width, 
+                        ant.height
+                    );
+                }
+                
+                // Draw carried dirt if applicable
+                if (ant.isCarryingDirt) {
+                    gameCtx.fillStyle = '#656521';
+                    gameCtx.fillRect(
+                        ant.x - TILE_WIDTH / 4, 
+                        ant.y - TILE_HEIGHT / 4, 
+                        TILE_WIDTH / 2, 
+                        TILE_HEIGHT / 2
+                    );
+                }
+            });
+        }
+        
+        // Draw the anteater
+        function drawAnteater() {
+            if (anteaterImage.complete) {
+                const anteaterHeight = CANVAS_HEIGHT / 4;
+                const anteaterX = CANVAS_WIDTH / 2;
+                const anteaterY = GROUND_LEVEL / 2;
+                
+                antCtx.drawImage(
+                    anteaterImage,
+                    anteaterX - anteaterHeight / 2,
+                    anteaterY,
+                    anteaterHeight,
+                    anteaterHeight
+                );
+            }
+        }
+        
+        // Draw the anteater's tongue
+        function drawAnteaterTongue() {
+            if (anteaterPath.length > 0) {
+                antCtx.strokeStyle = 'red';
+                antCtx.lineWidth = 5;
+                antCtx.beginPath();
+                
+                // Start from anteater's position
+                const startX = CANVAS_WIDTH / 2;
+                const startY = GROUND_LEVEL - 10; // Just below ground level
+                antCtx.moveTo(startX, startY);
+                
+                // Draw path to the target tile
+                for (let i = 0; i < anteaterPath.length; i++) {
+                    const point = centerPointsMap[anteaterPath[i]];
+                    antCtx.lineTo(point.x, point.y + GROUND_LEVEL);
+                }
+                
+                antCtx.stroke();
+            }
+        }
+        
+        // Handle mouse clicks
+        function handleClick(event) {
+            if (!canEat || gameOver) return;
+            
+            const rect = gameCanvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top - GROUND_LEVEL;
+            
+            // Only respond to clicks in the underground area
+            if (y >= 0) {
+                // Convert to tile index
+                const col = Math.floor(x / TILE_WIDTH);
+                const row = Math.floor(y / TILE_HEIGHT);
+                const index = row * MAP_COLS + col;
+                
+                if (index >= 0 && index < gameMap.length) {
+                    antEater(index);
+                }
+            }
+        }
+        
+        // Trigger anteater tongue
+        function antEater(index) {
+            if (canEat) {
+                const lairIndex = gameMap.indexOf(TILE_LAIR);
+                anteaterPath = aStar(lairIndex, index);
+                
+                // Check for ants on the path
+                ants = ants.filter(ant => {
+                    if (anteaterPath.includes(ant.position)) {
+                        antsEaten++;
+                        document.getElementById('ants-eaten').textContent = antsEaten;
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // Reset after a delay
+                setTimeout(() => {
+                    anteaterPath = [];
+                }, 100);
+                
+                // Update UI
+                canEat = false;
+                document.getElementById('can-eat').textContent = 'No';
+            }
+        }
+        
+        // Move all ants
+        function moveAnts() {
+            ants.forEach(ant => {
+                // Check if ant was eaten by anteater
+                if (anteaterPath.includes(ant.position)) {
+                    return;
+                }
+                
+                // Move toward target if we have one
+                if (ant.targetX !== undefined && ant.targetY !== undefined) {
+                    const dx = ant.targetX - ant.x;
+                    const dy = ant.targetY - ant.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // If close enough to target, consider it reached
+                    if (dist < 2) {
+                        ant.x = ant.targetX;
+                        ant.y = ant.targetY;
+                        
+                        // If we have a path, move to next point
+                        if (ant.path.length > 0) {
+                            const nextPosition = ant.path.shift();
+                            ant.position = nextPosition;
+                            
+                            // Add pheromone to the path
+                            addPheromone(nextPosition, ant.feromone);
+                            
+                            // Set next target
+                            const point = centerPointsMap[nextPosition];
+                            ant.targetX = point.x;
+                            ant.targetY = point.y;
+                        } else {
+                            // Path completed, decide what to do next
+                            
+                            // If at lair and carrying dirt, drop it
+                            if (ant.isCarryingDirt && gameMap[ant.position] === TILE_LAIR) {
+                                ant.isCarryingDirt = false;
+                            }
+                            
+                            // If at tunnel and not carrying dirt, try to dig
+                            else if (!ant.isCarryingDirt && gameMap[ant.position] === TILE_TUNNEL) {
+                                // Check if there's a neighboring dirt tile
+                                const neighbors = getNeighborsOfType(ant.position, TILE_DIRT);
+                                if (neighbors.length > 0) {
+                                    // Convert a dirt tile to dug
+                                    getDirt(ant.position);
+                                    ant.isCarryingDirt = true;
+                                }
+                            }
+                            
+                            // Find a new path
+                            findNewPath(ant);
+                        }
+                    } else {
+                        // Move toward target
+                        const speed = 1.0;
+                        ant.x += (dx / dist) * speed;
+                        ant.y += (dy / dist) * speed;
+                    }
+                } else {
+                    // No target, find a new path
+                    findNewPath(ant);
+                }
+            });
+        }
+        
+        // Get neighbors of a specific type
+        function getNeighborsOfType(index, type) {
+            const col = index % MAP_COLS;
+            const row = Math.floor(index / MAP_COLS);
+            
+            const up = row > 0 ? index - MAP_COLS : -1;
+            const down = row < MAP_ROWS - 1 ? index + MAP_COLS : -1;
+            const left = col > 0 ? index - 1 : -1;
+            const right = col < MAP_COLS - 1 ? index + 1 : -1;
+            
+            const neighbors = [];
+            
+            if (up >= 0 && gameMap[up] === type) neighbors.push(up);
+            if (down >= 0 && gameMap[down] === type) neighbors.push(down);
+            if (left >= 0 && gameMap[left] === type) neighbors.push(left);
+            if (right >= 0 && gameMap[right] === type) neighbors.push(right);
+            
+            return neighbors;
+        }
+        
+        // Find a new path for an ant
+        function findNewPath(ant) {
+            // If carrying dirt, go back to the lair
+            if (ant.isCarryingDirt) {
+                const lairIndex = gameMap.indexOf(TILE_LAIR);
+                ant.path = aStar(ant.position, lairIndex);
+                ant.path.shift(); // Remove current position
+            } else {
+                // Find the best tunnel to go to based on pheromones
+                const tunnels = [];
+                for (let i = 0; i < gameMap.length; i++) {
+                    if (gameMap[i] === TILE_TUNNEL) {
+                        tunnels.push(i);
+                    }
+                }
+                
+                if (tunnels.length === 0) {
+                    // No tunnels found, stay in place
+                    return;
+                }
+                
+                // Calculate paths to multiple tunnels
+                const paths = [];
+                for (let i = 0; i < Math.min(3, tunnels.length); i++) {
+                    const tunnelIndex = tunnels[i];
+                    const path = aStar(ant.position, tunnelIndex);
+                    
+                    // Calculate pheromone strength on this path
+                    let pheromoneStrength = 0;
+                    for (const index of path) {
+                        pheromoneStrength += pheromoneMap[index] || 0;
+                    }
+                    
+                    paths.push({
+                        path: path,
+                        strength: pheromoneStrength
+                    });
+                }
+                
+                // Sort by pheromone strength
+                paths.sort((a, b) => b.strength - a.strength);
+                
+                // Choose path with probability based on pheromone strength
+                const totalStrength = paths.reduce((sum, p) => sum + p.strength, 0) || 1;
+                const normalizedStrengths = paths.map(p => p.strength / totalStrength);
+                
+                // Roulette wheel selection
+                const rand = Math.random();
+                let cumulativeProbability = 0;
+                
+                for (let i = 0; i < normalizedStrengths.length; i++) {
+                    cumulativeProbability += normalizedStrengths[i];
+                    if (rand <= cumulativeProbability) {
+                        ant.path = paths[i].path;
+                        break;
+                    }
+                }
+                
+                // Fallback to first path if selection fails
+                if (ant.path.length === 0) {
+                    ant.path = paths[0].path;
+                }
+                
+                ant.path.shift(); // Remove current position
+            }
+            
+            // Set feromone strength based on path length
+            ant.feromone = 1 / (ant.path.length || 1);
+            
+            // Set initial target
+            if (ant.path.length > 0) {
+                const nextPosition = ant.path[0];
+                const point = centerPointsMap[nextPosition];
+                ant.targetX = point.x;
+                ant.targetY = point.y;
+            }
+        }
+        
+        // Add pheromone to the map
+        function addPheromone(index, amount = 0.1) {
+            if (gameMap[index] > 0) {
+                pheromoneMap[index] = Math.min(1, pheromoneMap[index] + amount);
+            }
+        }
+        
+        // Get dirt from a tile
+        function getDirt(index) {
+            gameMap[index] = TILE_DUG;
+            
+            // Find neighboring dirt tiles
+            const col = index % MAP_COLS;
+            const row = Math.floor(index / MAP_COLS);
+            
+            const up = row > 0 ? index - MAP_COLS : -1;
+            const down = row < MAP_ROWS - 1 ? index + MAP_COLS : -1;
+            const left = col > 0 ? index - 1 : -1;
+            const right = col < MAP_COLS - 1 ? index + 1 : -1;
+            
+            const neighbors = [];
+            
+            if (up >= 0 && gameMap[up] === TILE_DIRT) neighbors.push(up);
+            if (down >= 0 && gameMap[down] === TILE_DIRT) neighbors.push(down);
+            if (left >= 0 && gameMap[left] === TILE_DIRT) neighbors.push(left);
+            if (right >= 0 && gameMap[right] === TILE_DIRT) neighbors.push(right);
+            
+            if (neighbors.length > 0) {
+                const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                gameMap[randomNeighbor] = TILE_TUNNEL;
+            }
+            
+            // If there are fewer than 3 tunnels, convert a dug tile back to tunnel
+            const tunnelCount = gameMap.filter(tile => tile === TILE_TUNNEL).length;
+            if (tunnelCount < 3) {
+                const lastDugIndex = gameMap.lastIndexOf(TILE_DUG);
+                if (lastDugIndex !== -1) {
+                    gameMap[lastDugIndex] = TILE_TUNNEL;
+                }
+            }
+        }
+        
+        // Draw UI elements
+        function drawUI() {
+            document.getElementById('ants-eaten').textContent = antsEaten;
+            document.getElementById('can-eat').textContent = canEat ? 'Yes' : 'No';
+            
+            // Add time remaining
+            antCtx.font = '16px Arial';
+            antCtx.fillStyle = 'white';
+            antCtx.textAlign = 'right';
+            antCtx.fillText('Time: ' + timeLeft + 's', CANVAS_WIDTH - 10, 20);
+            
+            // Add depth indicator
+            for (let i = 0; i < MAP_ROWS; i++) {
+                if (i === maxDepth) {
+                    gameCtx.strokeStyle = 'red';
+                    gameCtx.lineWidth = 2;
+                    gameCtx.beginPath();
+                    gameCtx.moveTo(0, i * TILE_HEIGHT);
+                    gameCtx.lineTo(CANVAS_WIDTH, i * TILE_HEIGHT);
+                    gameCtx.stroke();
+                    
+                    gameCtx.font = '12px Arial';
+                    gameCtx.fillStyle = 'red';
+                    gameCtx.textAlign = 'left';
+                    gameCtx.fillText('MAX DEPTH', 5, i * TILE_HEIGHT - 5);
+                    break;
+                }
+            }
+        }
+        
+        // Check win/lose conditions
+        function checkWinLoseConditions() {
+            // Check if ants have dug too deep
+            for (let row = maxDepth; row < MAP_ROWS; row++) {
+                for (let col = 0; col < MAP_COLS; col++) {
+                    const index = row * MAP_COLS + col;
+                    if (gameMap[index] > 0 && gameMap[index] !== TILE_DIRT) {
+                        // Ants have dug too deep, player loses
+                        endGame(false);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // End the game
+        function endGame(playerWins) {
+            gameOver = true;
+            gameWon = playerWins;
+        }
+        
+        // Load resources and initialize the game
+        window.onload = function() {
+            init();
+        };
+    </script>
+</body>
+</html> 
