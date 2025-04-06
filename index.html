@@ -73,6 +73,39 @@
         const TILE_WIDTH = CANVAS_WIDTH / MAP_COLS;
         const TILE_HEIGHT = CANVAS_HEIGHT / MAP_ROWS;
         
+        // Audio elements
+        const eatSound = new Audio('eat.mp3');
+        const diggingSound = new Audio('digging.mp3');
+        diggingSound.loop = true; // Set the digging sound to loop
+        let audioInitialized = false;
+        
+        // Preload audio files
+        function preloadAudio() {
+            const audioFiles = ['eat.mp3', 'digging.mp3'];
+            audioFiles.forEach(file => {
+                const audio = new Audio();
+                audio.src = file;
+            });
+        }
+        preloadAudio();
+        
+        // Handle page visibility changes (pause audio when tab is hidden)
+        document.addEventListener('visibilitychange', function() {
+            if (audioInitialized) {
+                if (document.hidden) {
+                    // Pause the digging sound when the page is not visible
+                    if (!diggingSound.paused) {
+                        diggingSound.pause();
+                    }
+                } else {
+                    // Resume the digging sound when the page becomes visible again
+                    if (!diggingSound.muted && diggingSound.paused && !gameOver) {
+                        diggingSound.play().catch(e => console.log("Couldn't resume audio:", e));
+                    }
+                }
+            }
+        });
+        
         // Game State
         let antsEaten = 0;
         let canEat = true;
@@ -144,6 +177,26 @@
             // Position the UI to account for centered layout
             document.getElementById('ui').style.left = (window.innerWidth - CANVAS_WIDTH) / 2 + 10 + 'px';
             
+            // Initialize audio on first user interaction
+            document.addEventListener('click', initializeAudio, { once: true });
+            
+            // Add mute button
+            const muteButton = document.createElement('button');
+            muteButton.id = 'mute-toggle';
+            muteButton.textContent = '🔊 Sound ON';
+            muteButton.style.position = 'absolute';
+            muteButton.style.top = '10px';
+            muteButton.style.right = '140px'; // Position to the left of debug button
+            muteButton.style.zIndex = '10';
+            muteButton.style.padding = '5px 10px';
+            muteButton.style.backgroundColor = '#4CAF50';
+            muteButton.style.color = 'white';
+            muteButton.style.border = 'none';
+            muteButton.style.borderRadius = '4px';
+            muteButton.style.cursor = 'pointer';
+            muteButton.addEventListener('click', toggleMute);
+            document.getElementById('game-container').appendChild(muteButton);
+            
             // Game loop
             setInterval(gameLoop, 1000/60);
             
@@ -202,7 +255,46 @@
                 if (event.key === 'd' || event.key === 'D') {
                     toggleDebugInfo();
                 }
+                
+                // Add keyboard shortcut for mute toggle (Press 'M')
+                if (event.key === 'm' || event.key === 'M') {
+                    toggleMute();
+                }
             });
+        }
+        
+        // Initialize audio (needs to be triggered by user interaction due to browser policies)
+        function initializeAudio() {
+            if (!audioInitialized) {
+                // Start background digging sound
+                diggingSound.play().catch(e => console.log("Audio couldn't start automatically:", e));
+                audioInitialized = true;
+            }
+        }
+        
+        // Toggle mute state for all sounds
+        function toggleMute() {
+            const muteButton = document.getElementById('mute-toggle');
+            
+            // Toggle mute state
+            diggingSound.muted = !diggingSound.muted;
+            eatSound.muted = !eatSound.muted;
+            
+            // Update button appearance
+            if (muteButton) {
+                if (diggingSound.muted) {
+                    muteButton.textContent = '🔇 Sound OFF';
+                    muteButton.style.backgroundColor = '#f44336';
+                } else {
+                    muteButton.textContent = '🔊 Sound ON';
+                    muteButton.style.backgroundColor = '#4CAF50';
+                }
+            }
+            
+            // If unmuting and audio was initialized, restart background sound if it's not playing
+            if (!diggingSound.muted && audioInitialized && diggingSound.paused) {
+                diggingSound.play().catch(e => console.log("Couldn't restart audio:", e));
+            }
         }
         
         // Toggle debug information display
@@ -880,6 +972,13 @@
         // Trigger anteater tongue
         function antEater(index) {
             if (canEat) {
+                // Play eat sound effect
+                if (audioInitialized) {
+                    // Reset sound to beginning and play
+                    eatSound.currentTime = 0;
+                    eatSound.play().catch(e => console.log("Couldn't play eat sound:", e));
+                }
+                
                 // Define the starting position - center top of the map
                 const anteaterX = Math.floor(MAP_COLS / 2); // Center column
                 const startingRow = 0; // Top row of the underground area
@@ -1222,6 +1321,22 @@
         function endGame(playerWins) {
             gameOver = true;
             gameWon = playerWins;
+            
+            // Stop background sound when the game is over
+            if (audioInitialized) {
+                diggingSound.pause();
+                diggingSound.currentTime = 0;
+                
+                // Play victory or defeat sound if needed
+                // (uncomment and add sounds if you want to add these later)
+                /*
+                if (gameWon) {
+                    victorySound.play().catch(e => console.log("Couldn't play victory sound:", e));
+                } else {
+                    defeatSound.play().catch(e => console.log("Couldn't play defeat sound:", e));
+                }
+                */
+            }
         }
         
         // Load resources and initialize the game
