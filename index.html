@@ -796,72 +796,109 @@
             const gameRect = gameCanvas.getBoundingClientRect();
             
             // Calculate click position relative to the game canvas
+            // Note: We don't need to subtract GROUND_LEVEL here because gameCanvas is already positioned at GROUND_LEVEL
             const clickX = event.clientX - gameRect.left;
-            const clickY = event.clientY - gameRect.top - GROUND_LEVEL;
+            const clickY = event.clientY - gameRect.top;
             
+            // Debug info for click handling
             console.log("Raw click coordinates:", {
                 clientX: event.clientX,
                 clientY: event.clientY,
                 gameRect: {
                     left: gameRect.left,
-                    top: gameRect.top
+                    top: gameRect.top,
+                    width: gameRect.width,
+                    height: gameRect.height
                 },
                 clickX,
-                clickY
+                clickY,
+                TILE_WIDTH,
+                TILE_HEIGHT,
+                MAP_COLS,
+                MAP_ROWS
             });
             
-            // Only respond to clicks in the underground area
-            if (clickY >= 0) {
-                // Convert to tile coordinates
-                const col = Math.floor(clickX / TILE_WIDTH);
-                const row = Math.floor(clickY / TILE_HEIGHT);
+            // Convert to tile coordinates
+            const col = Math.floor(clickX / TILE_WIDTH);
+            const row = Math.floor(clickY / TILE_HEIGHT);
+            
+            // Ensure coordinates are within bounds
+            if (col >= 0 && col < MAP_COLS && row >= 0 && row < MAP_ROWS) {
+                const index = row * MAP_COLS + col;
+                console.log("Calculated tile position:", { 
+                    col, 
+                    row, 
+                    index,
+                    mapValue: gameMap[index],
+                    tileType: gameMap[index] === 0 ? "DIRT" : 
+                             gameMap[index] === 1 ? "TUNNEL" : 
+                             gameMap[index] === 2 ? "DUG" : 
+                             gameMap[index] === 3 ? "LAIR" : "UNKNOWN"
+                });
                 
-                // Ensure coordinates are within bounds
-                if (col >= 0 && col < MAP_COLS && row >= 0 && row < MAP_ROWS) {
-                    const index = row * MAP_COLS + col;
-                    console.log("Calculated tile position:", { col, row, index });
+                // Show a temporary visual feedback at the clicked position with tile info
+                if (showDebugInfo) {
+                    // Show extended click debug information on screen
+                    antCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    antCtx.fillRect(10, 60, 300, 110);
+                    antCtx.font = '14px monospace';
+                    antCtx.fillStyle = 'white';
+                    antCtx.textAlign = 'left';
+                    antCtx.textBaseline = 'top';
+                    antCtx.fillText(`Click: (${Math.round(clickX)}, ${Math.round(clickY)})`, 20, 70);
+                    antCtx.fillText(`Tile: (${col}, ${row}) → Index: ${index}`, 20, 90);
+                    antCtx.fillText(`Value: ${gameMap[index]} (${gameMap[index] === 0 ? "DIRT" : 
+                                                                 gameMap[index] === 1 ? "TUNNEL" : 
+                                                                 gameMap[index] === 2 ? "DUG" : 
+                                                                 gameMap[index] === 3 ? "LAIR" : "UNKNOWN"})`, 20, 110);
+                    antCtx.fillText(`Expected: ${row * MAP_COLS + col} (r${row} × ${MAP_COLS} + c${col})`, 20, 130);
                     
-                    // Show a temporary visual feedback at the clicked position
-                    const clickFeedback = () => {
-                        gameCtx.fillStyle = 'rgba(255, 255, 0, 0.5)';
-                        gameCtx.beginPath();
-                        gameCtx.arc(
-                            col * TILE_WIDTH + TILE_WIDTH / 2,
-                            row * TILE_HEIGHT + TILE_HEIGHT / 2,
-                            TILE_WIDTH / 3,
-                            0,
-                            Math.PI * 2
-                        );
-                        gameCtx.fill();
-                        
-                        // Remove the feedback after a short delay
-                        setTimeout(() => {
-                            // Redraw that tile to clear the feedback
-                            gameCtx.fillStyle = getTileColor(index);
-                            gameCtx.fillRect(
-                                col * TILE_WIDTH,
-                                row * TILE_HEIGHT,
-                                TILE_WIDTH,
-                                TILE_HEIGHT
-                            );
-                            
-                            // Redraw pheromone if present
-                            if (pheromoneMap[index] > 0) {
-                                gameCtx.fillStyle = `rgba(0, 255, 0, ${pheromoneMap[index]})`;
-                                gameCtx.fillRect(
-                                    col * TILE_WIDTH + TILE_WIDTH * 0.1,
-                                    row * TILE_HEIGHT + TILE_HEIGHT * 0.1,
-                                    TILE_WIDTH * 0.8,
-                                    TILE_HEIGHT * 0.8
-                                );
-                            }
-                        }, 300);
-                    };
-                    
-                    // Show feedback and trigger anteater
-                    clickFeedback();
-                    antEater(index);
+                    // Clear debug info after a few seconds
+                    setTimeout(() => {
+                        antCtx.clearRect(10, 60, 300, 110);
+                    }, 3000);
                 }
+                
+                // Show a temporary visual feedback at the clicked position
+                const clickFeedback = () => {
+                    gameCtx.fillStyle = 'rgba(255, 255, 0, 0.5)';
+                    gameCtx.beginPath();
+                    gameCtx.arc(
+                        col * TILE_WIDTH + TILE_WIDTH / 2,
+                        row * TILE_HEIGHT + TILE_HEIGHT / 2,
+                        TILE_WIDTH / 3,
+                        0,
+                        Math.PI * 2
+                    );
+                    gameCtx.fill();
+                    
+                    // Remove the feedback after a short delay
+                    setTimeout(() => {
+                        // Redraw that tile to clear the feedback
+                        gameCtx.fillStyle = getTileColor(index);
+                        gameCtx.fillRect(
+                            col * TILE_WIDTH,
+                            row * TILE_HEIGHT,
+                            TILE_WIDTH,
+                            TILE_HEIGHT
+                        );
+                        
+                        // Redraw pheromone if present
+                        if (pheromoneMap[index] > 0) {
+                            gameCtx.fillStyle = `rgba(0, 255, 0, ${pheromoneMap[index]})`;
+                            gameCtx.fillRect(
+                                col * TILE_WIDTH + TILE_WIDTH * 0.1,
+                                row * TILE_HEIGHT + TILE_HEIGHT * 0.1,
+                                TILE_WIDTH * 0.8,
+                                TILE_HEIGHT * 0.8
+                            );
+                        }
+                    }, 300);
+                };
+                
+                // Show feedback and trigger anteater
+                clickFeedback();
+                antEater(index);
             }
         }
         
