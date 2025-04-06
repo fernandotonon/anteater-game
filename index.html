@@ -336,7 +336,11 @@
         function drawBackground() {
             // Sky
             bgCtx.fillStyle = '#87CEEB'; // Sky blue
-            bgCtx.fillRect(0, 0, CANVAS_WIDTH, TOTAL_HEIGHT);
+            bgCtx.fillRect(0, 0, CANVAS_WIDTH, GROUND_LEVEL);
+            
+            // Underground background - solid black
+            bgCtx.fillStyle = '#000000'; // Black
+            bgCtx.fillRect(0, GROUND_LEVEL, CANVAS_WIDTH, TOTAL_HEIGHT - GROUND_LEVEL);
             
             // Clouds
             bgCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -790,7 +794,7 @@
                     anteaterImage,
                     anteaterX - 10 ,  // Center the anteater horizontally
                     anteaterY - anteaterHeight / 4,  // Position it slightly higher
-                    anteaterHeight,
+                    anteaterHeight * 2,
                     anteaterHeight
                 );
             }
