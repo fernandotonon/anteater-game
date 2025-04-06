@@ -83,7 +83,7 @@
         let maxDepth = 10; // Maximum depth ants can dig before player loses
         let gameTime = 120; // Game time in seconds
         let timeLeft = gameTime;
-        let showDebugInfo = true; // Debug mode toggle
+        let showDebugInfo = false; // Debug mode toggle - disabled by default
         
         // Map data
         const TILE_DIRT = 0;
@@ -182,11 +182,18 @@
             
             // Add debug toggle button
             const debugToggle = document.createElement('button');
-            debugToggle.textContent = 'Toggle Debug Info';
+            debugToggle.id = 'debug-toggle';
+            debugToggle.textContent = showDebugInfo ? 'Debug: ON' : 'Debug: OFF';
             debugToggle.style.position = 'absolute';
             debugToggle.style.top = '10px';
             debugToggle.style.right = '10px';
             debugToggle.style.zIndex = '10';
+            debugToggle.style.padding = '5px 10px';
+            debugToggle.style.backgroundColor = showDebugInfo ? '#4CAF50' : '#f44336';
+            debugToggle.style.color = 'white';
+            debugToggle.style.border = 'none';
+            debugToggle.style.borderRadius = '4px';
+            debugToggle.style.cursor = 'pointer';
             debugToggle.addEventListener('click', toggleDebugInfo);
             document.getElementById('game-container').appendChild(debugToggle);
             
@@ -201,6 +208,15 @@
         // Toggle debug information display
         function toggleDebugInfo() {
             showDebugInfo = !showDebugInfo;
+            console.log("Debug mode: " + (showDebugInfo ? "ON" : "OFF"));
+            
+            // Update button text and color
+            const debugToggle = document.getElementById('debug-toggle');
+            if (debugToggle) {
+                debugToggle.textContent = showDebugInfo ? 'Debug: ON' : 'Debug: OFF';
+                debugToggle.style.backgroundColor = showDebugInfo ? '#4CAF50' : '#f44336';
+            }
+            
             drawMap(); // Redraw map to update display
         }
         
@@ -417,12 +433,8 @@
         
         // A* pathfinding algorithm
         function aStar(start, end) {
-            console.log("A* starting from", start, "to", end);
-            
             // Check if end point is reachable
             if (gameMap[end] === TILE_DIRT && end !== start) {
-                console.log("Target is a dirt tile, cannot move through it:", gameMap[end]);
-                
                 // Find the nearest non-dirt tile as an alternative target
                 let nearestNonDirt = -1;
                 let minDistance = Infinity;
@@ -444,10 +456,8 @@
                 }
                 
                 if (nearestNonDirt !== -1) {
-                    console.log("Using nearest non-dirt tile instead:", nearestNonDirt);
                     end = nearestNonDirt;
                 } else {
-                    console.log("No non-dirt tiles found, cannot create path");
                     return [start];
                 }
             }
@@ -572,7 +582,6 @@
                 
                 // If we reached the end, reconstruct and return the path
                 if (current === end) {
-                    console.log("Path found in", iterations, "iterations");
                     return reconstructPath(cameFrom, current);
                 }
                 
@@ -611,12 +620,7 @@
                 }
             }
             
-            // If we get here, no path was found or too many iterations
-            console.log("No path found or too many iterations:", iterations);
-            
-            // We won't create a direct path since we only want to move through dug tiles
-            // Just return the starting position
-            console.log("No valid path through dug tiles exists");
+            // If no path was found, return the starting position
             return [start];
         }
         
@@ -796,27 +800,8 @@
             const gameRect = gameCanvas.getBoundingClientRect();
             
             // Calculate click position relative to the game canvas
-            // Note: We don't need to subtract GROUND_LEVEL here because gameCanvas is already positioned at GROUND_LEVEL
             const clickX = event.clientX - gameRect.left;
             const clickY = event.clientY - gameRect.top;
-            
-            // Debug info for click handling
-            console.log("Raw click coordinates:", {
-                clientX: event.clientX,
-                clientY: event.clientY,
-                gameRect: {
-                    left: gameRect.left,
-                    top: gameRect.top,
-                    width: gameRect.width,
-                    height: gameRect.height
-                },
-                clickX,
-                clickY,
-                TILE_WIDTH,
-                TILE_HEIGHT,
-                MAP_COLS,
-                MAP_ROWS
-            });
             
             // Convert to tile coordinates
             const col = Math.floor(clickX / TILE_WIDTH);
@@ -825,16 +810,6 @@
             // Ensure coordinates are within bounds
             if (col >= 0 && col < MAP_COLS && row >= 0 && row < MAP_ROWS) {
                 const index = row * MAP_COLS + col;
-                console.log("Calculated tile position:", { 
-                    col, 
-                    row, 
-                    index,
-                    mapValue: gameMap[index],
-                    tileType: gameMap[index] === 0 ? "DIRT" : 
-                             gameMap[index] === 1 ? "TUNNEL" : 
-                             gameMap[index] === 2 ? "DUG" : 
-                             gameMap[index] === 3 ? "LAIR" : "UNKNOWN"
-                });
                 
                 // Show a temporary visual feedback at the clicked position with tile info
                 if (showDebugInfo) {
@@ -905,8 +880,6 @@
         // Trigger anteater tongue
         function antEater(index) {
             if (canEat) {
-                console.log("Starting antEater function with target index:", index);
-                
                 // Define the starting position - center top of the map
                 const anteaterX = Math.floor(MAP_COLS / 2); // Center column
                 const startingRow = 0; // Top row of the underground area
@@ -914,8 +887,6 @@
                 
                 // Make sure we start from a non-dirt tile, if not, find the nearest one
                 if (gameMap[anteaterPosition] === TILE_DIRT) {
-                    console.log("Start position is a dirt tile, finding nearest non-dirt tile");
-                    
                     // Find the nearest non-dirt tile to the anteater
                     let nearestNonDirt = -1;
                     let minDistance = Infinity;
@@ -934,20 +905,14 @@
                     }
                     
                     if (nearestNonDirt !== -1) {
-                        console.log("Using nearest non-dirt tile for start:", nearestNonDirt);
                         anteaterPosition = nearestNonDirt;
                     } else {
-                        console.log("No non-dirt tiles found, cannot create path");
                         return;
                     }
                 }
                 
-                console.log("Anteater tongue start position:", { anteaterX, startingRow, anteaterPosition });
-                
                 // Check if the clicked position is a dirt tile
                 if (gameMap[index] === TILE_DIRT) {
-                    console.log("Target is a dirt tile, finding nearest non-dirt tile");
-                    
                     // Find the nearest non-dirt tile to click position
                     let nearestNonDirt = -1;
                     let minDistance = Infinity;
@@ -969,17 +934,14 @@
                     }
                     
                     if (nearestNonDirt !== -1) {
-                        console.log("Using nearest non-dirt tile instead:", nearestNonDirt);
                         index = nearestNonDirt;
                     } else {
-                        console.log("No non-dirt tiles found, cannot create path");
                         return;
                     }
                 }
                 
                 // Calculate path from anteater position to clicked position
                 anteaterPath = aStar(anteaterPosition, index);
-                console.log("A* path calculated:", anteaterPath);
                 
                 // Check for ants on the path
                 const eatenAnts = [];
@@ -992,7 +954,6 @@
                     return true;
                 });
                 
-                console.log("Ants eaten:", eatenAnts);
                 document.getElementById('ants-eaten').textContent = antsEaten;
                 
                 // Make the tongue stay visible longer
