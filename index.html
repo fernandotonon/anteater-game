@@ -39,7 +39,7 @@
             background-color: transparent;
             z-index: 3;
         }
-        #ui {
+        #game-stats {
             position: absolute;
             top: 10px;
             left: 10px;
@@ -56,8 +56,9 @@
         <canvas id="backgroundCanvas" width="960" height="600"></canvas>
         <canvas id="gameCanvas" width="960" height="480"></canvas>
         <canvas id="anteaterCanvas" width="960" height="600"></canvas>
-        <div id="ui">
+        <div id="game-stats">
             <div>Ants Eaten: <span id="ants-eaten">0</span></div>
+            <div>Living Ants: <span id="living-ants">0</span></div>
             <div>Can Eat: <span id="can-eat">Yes</span></div>
         </div>
     </div>
@@ -136,7 +137,6 @@
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
         ];
         
@@ -171,11 +171,13 @@
             drawAnteater();
             spawnAnt();
             
+            // Initialize UI counters
+            document.getElementById('ants-eaten').textContent = antsEaten;
+            document.getElementById('living-ants').textContent = ants.length;
+            document.getElementById('can-eat').textContent = canEat ? 'Yes' : 'No';
+            
             // Position the game canvas
             gameCanvas.style.top = GROUND_LEVEL + 'px';
-            
-            // Position the UI to account for centered layout
-            document.getElementById('ui').style.left = (window.innerWidth - CANVAS_WIDTH) / 2 + 10 + 'px';
             
             // Initialize audio on first user interaction
             document.addEventListener('click', initializeAudio, { once: true });
@@ -479,6 +481,12 @@
                     CANVAS_WIDTH / 2, 
                     CANVAS_HEIGHT / 2 + 90
                 );
+                
+                gameCtx.fillText(
+                    'Ants survived: ' + ants.length, 
+                    CANVAS_WIDTH / 2, 
+                    CANVAS_HEIGHT / 2 + 120
+                );
             }
         }
         
@@ -607,26 +615,27 @@
                         f: 0
                     });
                 } else {
-                    // Normal case - move through any non-dirt tile (tunnels, dug tiles, lair, etc.)
-                    if (up >= 0 && (gameMap[up] > 0 || gameMap[up] === -1 || up === end)) neighbors.push({
+                    // Normal case - ONLY move through non-dirt tiles (value > 0)
+                    // Add a condition to ensure ants only move through tiles with values > 0
+                    if (up >= 0 && gameMap[up] > 0) neighbors.push({
                         index: up,
                         g: 0,
                         f: 0
                     });
                     
-                    if (down >= 0 && (gameMap[down] > 0 || gameMap[down] === -1 || down === end)) neighbors.push({
+                    if (down >= 0 && gameMap[down] > 0) neighbors.push({
                         index: down,
                         g: 0,
                         f: 0
                     });
                     
-                    if (left >= 0 && (gameMap[left] > 0 || gameMap[left] === -1 || left === end)) neighbors.push({
+                    if (left >= 0 && gameMap[left] > 0) neighbors.push({
                         index: left,
                         g: 0,
                         f: 0
                     });
                     
-                    if (right >= 0 && (gameMap[right] > 0 || gameMap[right] === -1 || right === end)) neighbors.push({
+                    if (right >= 0 && gameMap[right] > 0) neighbors.push({
                         index: right,
                         g: 0,
                         f: 0
@@ -725,6 +734,9 @@
             // Find lair position
             const lairIndex = gameMap.indexOf(TILE_LAIR);
             if (lairIndex === -1) return;
+            
+            // Verify lair has a valid value (should be > 0)
+            if (gameMap[lairIndex] <= 0) return;
             
             // Calculate position
             const x = centerPointsMap[lairIndex].x;
@@ -1048,10 +1060,42 @@
                 
                 // Check for ants on the path
                 const eatenAnts = [];
+                let antsWithDirtEaten = 0;
+                
                 ants = ants.filter(ant => {
                     if (anteaterPath.includes(ant.position)) {
                         antsEaten++;
                         eatenAnts.push(ant.position);
+                        
+                        // Check if the ant was carrying dirt
+                        if (ant.isCarryingDirt) {
+                            antsWithDirtEaten++;
+                            
+                            // Convert the tile where the ant is to a TUNNEL (1) instead of DIRT (0)
+                            // This ensures ants can target it later and prevent impossible situations
+                            if (gameMap[ant.position] === TILE_DUG || gameMap[ant.position] === TILE_TUNNEL) {
+                                // Convert the tile to tunnel instead of dirt
+                                gameMap[ant.position] = TILE_TUNNEL;
+                                
+                                // Visual effect at the position
+                                const col = ant.position % MAP_COLS;
+                                const row = Math.floor(ant.position / MAP_COLS);
+                                
+                                // Flash effect - using tunnel color
+                                gameCtx.fillStyle = 'rgba(101, 101, 33, 0.9)'; // Brown with transparency (tunnel color)
+                                gameCtx.fillRect(
+                                    col * TILE_WIDTH, 
+                                    row * TILE_HEIGHT, 
+                                    TILE_WIDTH, 
+                                    TILE_HEIGHT
+                                );
+                                
+                                if (showDebugInfo) {
+                                    console.log("Created a tunnel at index " + ant.position + " where ant was eaten!");
+                                }
+                            }
+                        }
+                        
                         return false;
                     }
                     return true;
@@ -1092,15 +1136,23 @@
                         // If we have a path, move to next point
                         if (ant.path.length > 0) {
                             const nextPosition = ant.path.shift();
-                            ant.position = nextPosition;
                             
-                            // Add pheromone to the path
-                            addPheromone(nextPosition, ant.feromone);
-                            
-                            // Set next target
-                            const point = centerPointsMap[nextPosition];
-                            ant.targetX = point.x;
-                            ant.targetY = point.y;
+                            // Ensure next position is a valid tile (has a value > 0)
+                            if (nextPosition >= 0 && nextPosition < gameMap.length && gameMap[nextPosition] > 0) {
+                                ant.position = nextPosition;
+                                
+                                // Add pheromone to the path
+                                addPheromone(nextPosition, ant.feromone);
+                                
+                                // Set next target
+                                const point = centerPointsMap[nextPosition];
+                                ant.targetX = point.x;
+                                ant.targetY = point.y;
+                            } else {
+                                // Invalid position - stay where we are and find a new path
+                                ant.path = [];
+                                findNewPath(ant);
+                            }
                         } else {
                             // Path completed, decide what to do next
                             
@@ -1228,9 +1280,21 @@
             // Set initial target
             if (ant.path.length > 0) {
                 const nextPosition = ant.path[0];
-                const point = centerPointsMap[nextPosition];
-                ant.targetX = point.x;
-                ant.targetY = point.y;
+                // Validate the next position
+                if (nextPosition >= 0 && nextPosition < gameMap.length && gameMap[nextPosition] > 0) {
+                    const point = centerPointsMap[nextPosition];
+                    ant.targetX = point.x;
+                    ant.targetY = point.y;
+                } else {
+                    // Invalid next position, clear path and stay in place
+                    ant.path = [];
+                    // If possible, find a valid path
+                    if (ant.position >= 0 && ant.position < gameMap.length && gameMap[ant.position] > 0) {
+                        const point = centerPointsMap[ant.position];
+                        ant.targetX = point.x;
+                        ant.targetY = point.y;
+                    }
+                }
             }
         }
         
@@ -1279,6 +1343,7 @@
         // Draw UI elements
         function drawUI() {
             document.getElementById('ants-eaten').textContent = antsEaten;
+            document.getElementById('living-ants').textContent = ants.length;
             document.getElementById('can-eat').textContent = canEat ? 'Yes' : 'No';
             
             // Add time remaining
